@@ -1,0 +1,67 @@
+[
+  {
+    "date": "1784447040",
+    "arn": "arn:aws:health:global::event/CLOUDFRONT/AWS_CLOUDFRONT_OPERATIONAL_ISSUE/AWS_CLOUDFRONT_OPERATIONAL_ISSUE_TEST_2EF1D48B613",
+    "region_name": null,
+    "status": "0",
+    "service": "cloudfront",
+    "service_name": "Amazon CloudFront",
+    "summary": "Increased 5xx Errors",
+    "end_time": "1784459280",
+    "event_log": [
+      {
+        "summary": "Increased 5xx Errors",
+        "message": "We are investigating increased 5xx errors for CloudFront customers utilizing VPC Origins connectivity.",
+        "status": 1,
+        "timestamp": 1784447040
+      },
+      {
+        "summary": "Increased 5xx Errors",
+        "message": "Based on our investigation, we believe the root cause is related to a packet processing subsystem. We are working on mitigation.",
+        "status": 2,
+        "timestamp": 1784449080
+      },
+      {
+        "summary": "Increased 5xx Errors",
+        "message": "The issue has been resolved and the service is operating normally.",
+        "status": 0,
+        "timestamp": 1784459280
+      }
+    ],
+    "impacted_services": {
+      "cloudfront": {
+        "service_name": "Amazon CloudFront",
+        "current": "0",
+        "max": "2"
+      },
+      "globalaccelerator": {
+        "service_name": "AWS Global Accelerator",
+        "current": "0",
+        "max": "1"
+      }
+    },
+    "impacted_service_status_changes": [
+      {
+        "service": "cloudfront",
+        "service_name": "Amazon CloudFront",
+        "previous_status": "0",
+        "current_status": "2",
+        "timestamp": 1784447040000
+      },
+      {
+        "service": "globalaccelerator",
+        "service_name": "AWS Global Accelerator",
+        "previous_status": "0",
+        "current_status": "1",
+        "timestamp": 1784450100000
+      },
+      {
+        "service": "cloudfront",
+        "service_name": "Amazon CloudFront",
+        "previous_status": "2",
+        "current_status": "0",
+        "timestamp": 1784459280000
+      }
+    ]
+  }
+]

@@ -1,0 +1,5 @@
+# Development and test dependencies only.
+# The Lambda runtime needs nothing beyond the standard library and boto3
+# (already provided by the python3.12 runtime).
+pytest>=8.0
+boto3>=1.34

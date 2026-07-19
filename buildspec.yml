@@ -1,0 +1,41 @@
+version: 0.2
+
+# CodeBuild spec: run the test suite and produce the Lambda deployment
+# package. The runtime has no external dependencies (standard library +
+# boto3 already in Lambda), so requirements.txt only holds dev/test tools.
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing dev dependencies..."
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+
+  pre_build:
+    commands:
+      - echo "Running test suite..."
+      - python -m pytest tests/ -q
+
+  build:
+    commands:
+      - echo "Packaging Lambda source..."
+      - mkdir -p build
+      - zip -qr build/lambda.zip src -x 'src/__pycache__/*'
+      - echo "Build completed on `date`"
+
+  post_build:
+    commands:
+      - ls -lh build/
+      - echo "Build successful!"
+
+artifacts:
+  files:
+    - build/lambda.zip
+    - infrastructure/template.yaml
+  name: BuildArtifact
+
+cache:
+  paths:
+    - '/root/.cache/pip/**/*'

@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  another_aws_health_telegram_bot - serverless bot that follows AWS Health
+  public events for their whole lifecycle and posts them to Telegram forum
+  topics (EventBridge Scheduler -> Lambda -> DynamoDB + Telegram Bot API).
+
+Parameters:
+  BotName:
+    Type: String
+    Default: another-aws-health-telegram-bot
+    Description: Base name for every resource of this stack.
+    AllowedPattern: '[a-zA-Z0-9-_]{1,50}'
+
+  TelegramBotToken:
+    Type: String
+    NoEcho: true
+    Description: >
+      Telegram bot token. Stored in Secrets Manager and read at runtime;
+      never exposed as a Lambda environment variable.
+
+  TelegramChatId:
+    Type: String
+    Description: Chat id of the target Telegram supergroup (forum).
+
+  RoutingRules:
+    Type: String
+    Default: '[{"name":"key-regions","topic_id":1,"regions":["eu-south-1","eu-west-1","eu-central-1","us-east-1","global"],"min_status":1},{"name":"all","topic_id":2,"regions":"*","min_status":2}]'
+    Description: >
+      JSON array of routing rules. Each rule has name, topic_id, regions
+      (list of region codes or "*") and min_status (minimum severity).
+
+  ScheduleExpression:
+    Type: String
+    Default: rate(3 minutes)
+    Description: >
+      EventBridge Scheduler expression for the polling cadence. Do not go
+      below one minute; the public endpoint is not meant to be hammered.
+
+  MaxMessagesPerRun:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    Description: >
+      Telegram message cap per execution (rate-limit protection); events
+      left over are picked up at the next poll.
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365]
+    Description: CloudWatch Logs retention.
+
+  StateTtlDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    Description: DynamoDB TTL for per-event state records.
+
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket holding the Lambda deployment package.
+
+  CodeS3Key:
+    Type: String
+    Description: S3 key of the Lambda deployment package (zip).
+
+Resources:
+  StateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${BotName}-state'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_arn
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_arn
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  BotTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${BotName}-telegram-token'
+      Description: Telegram bot token (plain string).
+      SecretString: !Ref TelegramBotToken
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${BotName}-dlq'
+      MessageRetentionPeriod: 1209600
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${BotName}'
+      RetentionInDays: !Ref LogRetentionDays
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${BotName}-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: state-table-access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource: !GetAtt StateTable.Arn
+        - PolicyName: token-secret-read
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref BotTokenSecret
+        - PolicyName: cloudwatch-logging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${BotName}:*'
+        - PolicyName: dlq-send
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt DeadLetterQueue.Arn
+
+  BotFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LogGroup
+    Properties:
+      FunctionName: !Ref BotName
+      Description: Polls the AWS Health public endpoint and posts to Telegram.
+      Runtime: python3.12
+      Handler: src.handler.lambda_handler
+      Timeout: 120
+      MemorySize: 256
+      # Single writer: prevents overlapping runs from producing duplicates.
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt ExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      DeadLetterConfig:
+        TargetArn: !GetAtt DeadLetterQueue.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref StateTable
+          TELEGRAM_CHAT_ID: !Ref TelegramChatId
+          ROUTING_RULES: !Ref RoutingRules
+          BOT_TOKEN_SECRET_ARN: !Ref BotTokenSecret
+          MAX_MESSAGES_PER_RUN: !Sub '${MaxMessagesPerRun}'
+          STATE_TTL_DAYS: !Sub '${StateTtlDays}'
+          BOT_NAME: !Ref BotName
+
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${BotName}-scheduler-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: invoke-bot-function
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt BotFunction.Arn
+
+  PollSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub '${BotName}-poll'
+      Description: Periodic polling of the AWS Health public endpoint.
+      ScheduleExpression: !Ref ScheduleExpression
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      State: ENABLED
+      Target:
+        Arn: !GetAtt BotFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 0
+
+  SchemaParseFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${BotName}-schema-parse-failure'
+      AlarmDescription: >
+        The AWS Health public endpoint payload could not be parsed. If AWS
+        changed the (undocumented) format, the only other symptom would be
+        topics silently going quiet: this alarm catches it early. The
+        metric is emitted by the Lambda in CloudWatch Embedded Metric
+        Format on every failed parse.
+      Namespace: AnotherAwsHealthTelegramBot
+      MetricName: SchemaParseFailures
+      Dimensions:
+        - Name: BotName
+          Value: !Ref BotName
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name.
+    Value: !Ref BotFunction
+  FunctionArn:
+    Description: Lambda function ARN.
+    Value: !GetAtt BotFunction.Arn
+  StateTableName:
+    Description: DynamoDB state table.
+    Value: !Ref StateTable
+  BotTokenSecretArn:
+    Description: Secrets Manager secret holding the Telegram token.
+    Value: !Ref BotTokenSecret
+  DeadLetterQueueUrl:
+    Description: SQS dead letter queue of the Lambda.
+    Value: !Ref DeadLetterQueue
+  LogGroupName:
+    Description: CloudWatch log group.
+    Value: !Ref LogGroup
