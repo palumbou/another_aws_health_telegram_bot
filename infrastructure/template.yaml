@@ -79,6 +79,9 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
   BotTokenSecret:
     Type: AWS::SecretsManager::Secret
@@ -86,23 +89,35 @@ Resources:
       Name: !Sub '${BotName}-telegram-token'
       Description: Telegram bot token (plain string).
       SecretString: !Ref TelegramBotToken
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub '${BotName}-dlq'
       MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${BotName}'
       RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
   ExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${BotName}-execution-role'
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -173,11 +188,17 @@ Resources:
           MAX_MESSAGES_PER_RUN: !Sub '${MaxMessagesPerRun}'
           STATE_TTL_DAYS: !Sub '${StateTtlDays}'
           BOT_NAME: !Ref BotName
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
   SchedulerRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${BotName}-scheduler-role'
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -194,6 +215,9 @@ Resources:
                 Action: lambda:InvokeFunction
                 Resource: !GetAtt BotFunction.Arn
 
+  # Note: AWS::Scheduler::Schedule does not support tags in CloudFormation,
+  # so the CostCenter tag cannot be applied to this resource (it has no
+  # direct cost anyway; the invoked Lambda is tagged).
   PollSchedule:
     Type: AWS::Scheduler::Schedule
     Properties:
@@ -230,6 +254,9 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
+      Tags:
+        - Key: CostCenter
+          Value: !Ref AWS::StackName
 
 Outputs:
   FunctionName:
