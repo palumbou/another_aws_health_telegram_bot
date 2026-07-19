@@ -130,7 +130,7 @@ Every taggable resource carries a `CostCenter` tag valued with the stack name, f
 |---|---|---|
 | `BotName` | `another-aws-health-telegram-bot` | Base name for every resource |
 | `TelegramBotToken` | — | Bot token (NoEcho, seeds the secret) |
-| `TelegramChatId` | `-100xxxxxxxxxx` | Target supergroup |
+| `TelegramChatId` | — (required) | Target supergroup |
 | `RoutingRules` | the two rules above | Routing rules JSON |
 | `ScheduleExpression` | `rate(3 minutes)` | Polling cadence (never below 1 minute) |
 | `MaxMessagesPerRun` | `15` | Per-run Telegram message cap |

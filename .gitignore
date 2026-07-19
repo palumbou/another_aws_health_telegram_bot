@@ -6,3 +6,6 @@ __pycache__/
 build/
 .venv/
 .DS_Store
+# Local deploy secrets/values, never committed
+.telegram_token
+deploy.local.env
