@@ -130,7 +130,7 @@ Ogni risorsa taggabile porta un tag `CostCenter` valorizzato con il nome dello s
 |---|---|---|
 | `BotName` | `another-aws-health-telegram-bot` | Nome base di tutte le risorse |
 | `TelegramBotToken` | — | Token del bot (NoEcho, inizializza il secret) |
-| `TelegramChatId` | — (obbligatorio) | Supergruppo di destinazione |
+| `TelegramChatId` | `-100xxxxxxxxxx` | Supergruppo di destinazione |
 | `RoutingRules` | le due regole sopra | JSON delle regole di routing |
 | `ScheduleExpression` | `rate(3 minutes)` | Cadenza di polling (mai sotto il minuto) |
 | `MaxMessagesPerRun` | `15` | Tetto di messaggi Telegram per esecuzione |
