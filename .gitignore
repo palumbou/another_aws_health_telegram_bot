@@ -9,3 +9,4 @@ build/
 # Local deploy secrets/values, never committed
 .telegram_token
 deploy.local.env
+routing.rules.local.json
