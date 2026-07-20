@@ -122,6 +122,8 @@ TELEGRAM_BOT_TOKEN='123456:ABC...' ./scripts/deploy.sh \
 
 The script runs the tests, validates the template, zips `src/`, uploads it to S3 and deploys `infrastructure/template.yaml`. The token is stored in **Secrets Manager** and read at runtime — never in an environment variable. On later deploys omit `TELEGRAM_BOT_TOKEN` to keep the stored one.
 
+To avoid retyping the values on every deploy, copy `deploy.local.env.example` to `deploy.local.env` and fill it in: the script sources it automatically if present. The file is gitignored; command-line options and already-exported variables take precedence over it.
+
 Every taggable resource carries a `CostCenter` tag valued with the stack name, for cost tracking (the EventBridge schedule is the only exception: CloudFormation does not support tags on it, and it has no direct cost).
 
 ### CloudFormation parameters

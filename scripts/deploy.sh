@@ -21,6 +21,10 @@
 #
 # TELEGRAM_BOT_TOKEN is required on the first deploy (it seeds the
 # Secrets Manager secret); on later deploys omit it to keep the stored one.
+#
+# If a deploy.local.env file exists in the project root it is sourced
+# automatically (gitignored; see deploy.local.env.example). Explicit
+# environment variables and command-line options still win over it.
 
 set -euo pipefail
 
@@ -34,6 +38,24 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TEMPLATE_FILE="$PROJECT_ROOT/infrastructure/template.yaml"
 BUILD_DIR="$PROJECT_ROOT/build"
 ZIP_FILE="$BUILD_DIR/lambda.zip"
+
+# Optional local values file: variables already set in the environment
+# take precedence over the file, options parsed below win over both.
+LOCAL_ENV_FILE="$PROJECT_ROOT/deploy.local.env"
+ENV_VARS=(STACK_NAME AWS_REGION BOT_NAME ARTIFACTS_BUCKET TELEGRAM_CHAT_ID
+          ROUTING_RULES_FILE SCHEDULE_EXPRESSION SKIP_TESTS TELEGRAM_BOT_TOKEN)
+if [[ -f "$LOCAL_ENV_FILE" ]]; then
+  info "Loading local values from $LOCAL_ENV_FILE"
+  for v in "${ENV_VARS[@]}"; do
+    if [[ -n "${!v:-}" ]]; then eval "_keep_$v=\${$v}"; fi
+  done
+  # shellcheck disable=SC1090
+  source "$LOCAL_ENV_FILE"
+  for v in "${ENV_VARS[@]}"; do
+    k="_keep_$v"
+    if [[ -n "${!k:-}" ]]; then eval "$v=\${$k}"; fi
+  done
+fi
 
 STACK_NAME="${STACK_NAME:-another-aws-health-telegram-bot}"
 AWS_REGION="${AWS_REGION:-eu-west-1}"
